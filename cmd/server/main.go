@@ -75,14 +75,19 @@ func main() {
 	}
 	log.Println("S3 storage initialized")
 
-	// Redis Cache
-	redisCache, err := cache.NewRedisCache(cfg.RedisAddr)
-	if err != nil {
-		log.Printf("Warning: Redis not available, running without cache: %v", err)
-		redisCache = nil
+	// Redis Cache (optional)
+	var redisCache *cache.RedisCache
+	if cfg.RedisAddr != "" && cfg.RedisAddr != "disabled" {
+		redisCache, err = cache.NewRedisCache(cfg.RedisAddr)
+		if err != nil {
+			log.Printf("Warning: Redis not available, running without cache: %v", err)
+			redisCache = nil
+		} else {
+			defer redisCache.Close()
+			log.Println("Redis cache initialized")
+		}
 	} else {
-		defer redisCache.Close()
-		log.Println("Redis cache initialized")
+		log.Println("Redis disabled, running without cache")
 	}
 
 	// Realtime data provider

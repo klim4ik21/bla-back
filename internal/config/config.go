@@ -52,8 +52,8 @@ func Load() *Config {
 		LiveKitAPIKey:    getEnv("LIVEKIT_API_KEY", "devkey"),
 		LiveKitAPISecret: getEnv("LIVEKIT_API_SECRET", "secretsecretsecretsecretsecretsecret"),
 
-		// Redis
-		RedisAddr: getEnv("REDIS_ADDR", "localhost:6379"),
+		// Redis (empty = disabled)
+		RedisAddr: getEnv("REDIS_ADDR", ""),
 	}
 }
 
