@@ -8,15 +8,11 @@ WORKDIR /app
 # Install dependencies
 RUN apk add --no-cache git
 
-# Copy go mod files
-COPY go.mod go.sum ./
-RUN go mod download
-
-# Copy source
+# Copy all source files
 COPY . .
 
-# Build
-RUN CGO_ENABLED=0 GOOS=linux GOTOOLCHAIN=auto go build -o server ./cmd/server
+# Download deps and build in one layer to preserve toolchain
+RUN go mod download && CGO_ENABLED=0 GOOS=linux go build -o server ./cmd/server
 
 # Runtime stage
 FROM alpine:3.19
