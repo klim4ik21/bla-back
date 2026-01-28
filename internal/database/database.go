@@ -213,6 +213,14 @@ func (db *DB) Migrate(ctx context.Context) error {
 
 		CREATE INDEX IF NOT EXISTS idx_stickers_pack ON stickers(pack_id);
 		CREATE INDEX IF NOT EXISTS idx_user_sticker_packs_user ON user_sticker_packs(user_id);
+
+		-- Add type column to messages for call messages
+		DO $$ BEGIN
+			ALTER TABLE messages ADD COLUMN IF NOT EXISTS type VARCHAR(20) DEFAULT 'text';
+		EXCEPTION WHEN others THEN NULL;
+		END $$;
+
+		CREATE INDEX IF NOT EXISTS idx_messages_type ON messages(type);
 	`
 
 	_, err := db.Pool.Exec(ctx, schema)

@@ -105,7 +105,7 @@ func main() {
 	authHandler := handlers.NewAuthHandler(authRepo, tokenService, s3Storage)
 	friendsHandler := handlers.NewFriendsHandler(friendsRepo, rtNode)
 	messagesHandler := handlers.NewMessagesHandler(messagesRepo, rtNode, s3Storage)
-	callsHandler := handlers.NewCallsHandler(callsRepo, voiceService, authRepo, rtNotifier, messagesRepo)
+	callsHandler := handlers.NewCallsHandler(callsRepo, voiceService, authRepo, rtNotifier, messagesRepo, messagesRepo)
 	stickersHandler := handlers.NewStickersHandler(stickersRepo, s3Storage, redisCache)
 
 	// Router

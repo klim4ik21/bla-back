@@ -10,6 +10,7 @@ type Message struct {
 	ID             uuid.UUID  `json:"id" db:"id"`
 	ConversationID uuid.UUID  `json:"conversation_id" db:"conversation_id"`
 	SenderID       uuid.UUID  `json:"sender_id" db:"sender_id"`
+	Type           string     `json:"type" db:"type"` // "text" (default), "call"
 	Content        string     `json:"content" db:"content"`
 	CreatedAt      time.Time  `json:"created_at" db:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at" db:"updated_at"`
@@ -18,6 +19,14 @@ type Message struct {
 	Sender      *User         `json:"sender,omitempty"`
 	Attachments []*Attachment `json:"attachments,omitempty"`
 	Reactions   []*Reaction   `json:"reactions,omitempty"`
+}
+
+// Call message content structure (stored as JSON in Content field)
+type CallMessageContent struct {
+	CallID       string   `json:"call_id"`
+	Duration     int      `json:"duration"`      // seconds
+	Participants []string `json:"participants"`  // user IDs who joined
+	Status       string   `json:"status"`        // "completed", "missed", "cancelled"
 }
 
 type Reaction struct {

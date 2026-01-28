@@ -145,15 +145,55 @@ func (r *Repository) LeaveCall(ctx context.Context, callID, userID uuid.UUID) er
 	return err
 }
 
-// EndCall marks the call as ended
-func (r *Repository) EndCall(ctx context.Context, callID uuid.UUID) error {
+// CallEndInfo contains info about an ended call
+type CallEndInfo struct {
+	CallID         uuid.UUID
+	ConversationID uuid.UUID
+	StartedBy      uuid.UUID
+	StartedAt      time.Time
+	EndedAt        time.Time
+	Duration       int // seconds
+	Participants   []uuid.UUID // all users who joined the call
+}
+
+// EndCall marks the call as ended and returns call info
+func (r *Repository) EndCall(ctx context.Context, callID uuid.UUID) (*CallEndInfo, error) {
 	now := time.Now()
 
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer tx.Rollback(ctx)
+
+	// Get call info before ending
+	var info CallEndInfo
+	info.CallID = callID
+	info.EndedAt = now
+	err = tx.QueryRow(ctx, `
+		SELECT conversation_id, started_by, started_at FROM calls WHERE id = $1
+	`, callID).Scan(&info.ConversationID, &info.StartedBy, &info.StartedAt)
+	if err != nil {
+		return nil, err
+	}
+	info.Duration = int(now.Sub(info.StartedAt).Seconds())
+
+	// Get all participants who ever joined (not just active ones)
+	rows, err := tx.Query(ctx, `
+		SELECT DISTINCT user_id FROM call_participants WHERE call_id = $1
+	`, callID)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var userID uuid.UUID
+		if err := rows.Scan(&userID); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		info.Participants = append(info.Participants, userID)
+	}
+	rows.Close()
 
 	// Mark all participants as left
 	_, err = tx.Exec(ctx, `
@@ -162,7 +202,7 @@ func (r *Repository) EndCall(ctx context.Context, callID uuid.UUID) error {
 		WHERE call_id = $2 AND left_at IS NULL
 	`, now, callID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// End the call
@@ -170,10 +210,14 @@ func (r *Repository) EndCall(ctx context.Context, callID uuid.UUID) error {
 		UPDATE calls SET ended_at = $1 WHERE id = $2
 	`, now, callID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	return &info, nil
 }
 
 // GetActiveParticipantCount returns how many users are currently in the call

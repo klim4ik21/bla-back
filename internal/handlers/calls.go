@@ -18,7 +18,8 @@ type CallsHandler struct {
 	voice     *calls.VoiceService
 	usersRepo UsersRepository
 	notifier  *realtime.Notifier
-	msgRepo   ConversationRepository
+	convRepo  ConversationRepository
+	msgRepo   MessagesRepository
 }
 
 type UsersRepository interface {
@@ -29,18 +30,24 @@ type ConversationRepository interface {
 	GetParticipantIDs(ctx context.Context, conversationID uuid.UUID) ([]uuid.UUID, error)
 }
 
+type MessagesRepository interface {
+	CreateCallMessage(ctx context.Context, convID, senderID uuid.UUID, content string) (*models.Message, error)
+}
+
 func NewCallsHandler(
 	callsRepo *calls.Repository,
 	voice *calls.VoiceService,
 	usersRepo UsersRepository,
 	notifier *realtime.Notifier,
-	msgRepo ConversationRepository,
+	convRepo ConversationRepository,
+	msgRepo MessagesRepository,
 ) *CallsHandler {
 	return &CallsHandler{
 		callsRepo: callsRepo,
 		voice:     voice,
 		usersRepo: usersRepo,
 		notifier:  notifier,
+		convRepo:  convRepo,
 		msgRepo:   msgRepo,
 	}
 }
@@ -54,7 +61,7 @@ type CallResponse struct {
 
 // broadcastCallState sends current call state to all conversation participants
 func (h *CallsHandler) broadcastCallState(ctx context.Context, conversationID uuid.UUID) {
-	participantIDs, err := h.msgRepo.GetParticipantIDs(ctx, conversationID)
+	participantIDs, err := h.convRepo.GetParticipantIDs(ctx, conversationID)
 	if err != nil {
 		log.Printf("Failed to get conversation participants: %v", err)
 		return
@@ -282,14 +289,74 @@ func (h *CallsHandler) LeaveCall(w http.ResponseWriter, r *http.Request) {
 	// Check if call is now empty
 	count, _ := h.callsRepo.GetActiveParticipantCount(r.Context(), callID)
 	if count == 0 {
-		// End the call
-		h.callsRepo.EndCall(r.Context(), callID)
+		// End the call and create call message
+		callInfo, err := h.callsRepo.EndCall(r.Context(), callID)
+		if err != nil {
+			log.Printf("EndCall error: %v", err)
+		} else {
+			// Create call message in the conversation
+			h.createCallMessage(r.Context(), callInfo)
+		}
 	}
 
 	// Broadcast updated call state (will show no call if ended)
 	h.broadcastCallState(r.Context(), call.ConversationID)
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// createCallMessage creates a system message for a completed call
+func (h *CallsHandler) createCallMessage(ctx context.Context, info *calls.CallEndInfo) {
+	if info == nil {
+		return
+	}
+
+	// Build participant IDs as strings
+	participants := make([]string, len(info.Participants))
+	for i, p := range info.Participants {
+		participants[i] = p.String()
+	}
+
+	// Determine call status
+	status := "completed"
+	if info.Duration < 5 && len(info.Participants) == 1 {
+		status = "missed" // Only caller, very short = likely missed
+	}
+
+	// Create JSON content
+	content := models.CallMessageContent{
+		CallID:       info.CallID.String(),
+		Duration:     info.Duration,
+		Participants: participants,
+		Status:       status,
+	}
+	contentJSON, err := json.Marshal(content)
+	if err != nil {
+		log.Printf("Failed to marshal call content: %v", err)
+		return
+	}
+
+	// Create the message (sender is the one who started the call)
+	msg, err := h.msgRepo.CreateCallMessage(ctx, info.ConversationID, info.StartedBy, string(contentJSON))
+	if err != nil {
+		log.Printf("Failed to create call message: %v", err)
+		return
+	}
+
+	// Notify all conversation participants about the new message
+	participantIDs, err := h.convRepo.GetParticipantIDs(ctx, info.ConversationID)
+	if err != nil {
+		log.Printf("Failed to get participant IDs: %v", err)
+		return
+	}
+
+	h.notifier.NotifyUsers(participantIDs, "MESSAGE_CREATE", map[string]interface{}{
+		"message":         msg,
+		"conversation_id": info.ConversationID,
+	})
+
+	log.Printf("Created call message: duration=%ds, participants=%d, status=%s",
+		info.Duration, len(info.Participants), status)
 }
 
 // GetActiveCall returns the active call for a conversation

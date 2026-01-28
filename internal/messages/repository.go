@@ -200,7 +200,7 @@ func (r *Repository) GetMessages(ctx context.Context, convID, userID uuid.UUID, 
 	// Single query: verify participant and get messages at once
 	// If user is not a participant, this returns 0 rows
 	rows, err := r.db.Query(ctx, `
-		SELECT m.id, m.conversation_id, m.sender_id, m.content, m.created_at, m.updated_at,
+		SELECT m.id, m.conversation_id, m.sender_id, COALESCE(m.type, 'text'), m.content, m.created_at, m.updated_at,
 			   u.id, u.email, u.username, u.avatar_url, u.status, u.created_at, u.updated_at
 		FROM messages m
 		JOIN users u ON m.sender_id = u.id
@@ -218,7 +218,7 @@ func (r *Repository) GetMessages(ctx context.Context, convID, userID uuid.UUID, 
 	for rows.Next() {
 		msg := &models.Message{Sender: &models.User{}}
 		err := rows.Scan(
-			&msg.ID, &msg.ConversationID, &msg.SenderID, &msg.Content, &msg.CreatedAt, &msg.UpdatedAt,
+			&msg.ID, &msg.ConversationID, &msg.SenderID, &msg.Type, &msg.Content, &msg.CreatedAt, &msg.UpdatedAt,
 			&msg.Sender.ID, &msg.Sender.Email, &msg.Sender.Username, &msg.Sender.AvatarURL, &msg.Sender.Status, &msg.Sender.CreatedAt, &msg.Sender.UpdatedAt,
 		)
 		if err != nil {
@@ -811,4 +811,36 @@ func (r *Repository) GetMessageReactions(ctx context.Context, messageID uuid.UUI
 func (r *Repository) loadReactions(ctx context.Context, messageID uuid.UUID) []*models.Reaction {
 	reactions, _ := r.GetMessageReactions(ctx, messageID)
 	return reactions
+}
+
+// CreateCallMessage creates a call system message in a conversation
+func (r *Repository) CreateCallMessage(ctx context.Context, convID, senderID uuid.UUID, content string) (*models.Message, error) {
+	msg := &models.Message{}
+	err := r.db.QueryRow(ctx, `
+		INSERT INTO messages (conversation_id, sender_id, type, content)
+		VALUES ($1, $2, 'call', $3)
+		RETURNING id, conversation_id, sender_id, type, content, created_at, updated_at
+	`, convID, senderID, content).Scan(
+		&msg.ID, &msg.ConversationID, &msg.SenderID, &msg.Type, &msg.Content, &msg.CreatedAt, &msg.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update conversation updated_at
+	_, _ = r.db.Exec(ctx, `UPDATE conversations SET updated_at = NOW() WHERE id = $1`, convID)
+
+	// Get sender info
+	msg.Sender = &models.User{}
+	_ = r.db.QueryRow(ctx, `
+		SELECT id, email, username, avatar_url, status, created_at, updated_at
+		FROM users WHERE id = $1
+	`, senderID).Scan(
+		&msg.Sender.ID, &msg.Sender.Email, &msg.Sender.Username, &msg.Sender.AvatarURL, &msg.Sender.Status, &msg.Sender.CreatedAt, &msg.Sender.UpdatedAt,
+	)
+
+	msg.Attachments = []*models.Attachment{}
+	msg.Reactions = []*models.Reaction{}
+
+	return msg, nil
 }
