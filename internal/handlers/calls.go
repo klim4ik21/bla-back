@@ -290,11 +290,12 @@ func (h *CallsHandler) LeaveCall(w http.ResponseWriter, r *http.Request) {
 	count, _ := h.callsRepo.GetActiveParticipantCount(r.Context(), callID)
 	if count == 0 {
 		// End the call and create call message
+		// EndCall returns nil if call was already ended (race condition)
 		callInfo, err := h.callsRepo.EndCall(r.Context(), callID)
 		if err != nil {
 			log.Printf("EndCall error: %v", err)
-		} else {
-			// Create call message in the conversation
+		} else if callInfo != nil {
+			// Only create message if we actually ended the call (not already ended)
 			h.createCallMessage(r.Context(), callInfo)
 		}
 	}

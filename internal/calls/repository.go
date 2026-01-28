@@ -157,6 +157,7 @@ type CallEndInfo struct {
 }
 
 // EndCall marks the call as ended and returns call info
+// Returns nil if call was already ended (race condition protection)
 func (r *Repository) EndCall(ctx context.Context, callID uuid.UUID) (*CallEndInfo, error) {
 	now := time.Now()
 
@@ -166,15 +167,20 @@ func (r *Repository) EndCall(ctx context.Context, callID uuid.UUID) (*CallEndInf
 	}
 	defer tx.Rollback(ctx)
 
-	// Get call info before ending
+	// Try to end the call atomically - only if not already ended
+	// Use FOR UPDATE to lock the row and prevent race conditions
 	var info CallEndInfo
 	info.CallID = callID
 	info.EndedAt = now
 	err = tx.QueryRow(ctx, `
-		SELECT conversation_id, started_by, started_at FROM calls WHERE id = $1
+		SELECT conversation_id, started_by, started_at
+		FROM calls
+		WHERE id = $1 AND ended_at IS NULL
+		FOR UPDATE
 	`, callID).Scan(&info.ConversationID, &info.StartedBy, &info.StartedAt)
 	if err != nil {
-		return nil, err
+		// Call already ended or not found - this is ok, just return nil
+		return nil, nil
 	}
 	info.Duration = int(now.Sub(info.StartedAt).Seconds())
 
