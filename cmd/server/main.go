@@ -54,11 +54,10 @@ func main() {
 	callsRepo := calls.NewRepository(db.Pool)
 	stickersRepo := stickers.NewRepository(db.Pool)
 
-	// LiveKit service
-	livekitService := calls.NewLiveKitService(calls.LiveKitConfig{
-		Host:      cfg.LiveKitHost,
-		APIKey:    cfg.LiveKitAPIKey,
-		APISecret: cfg.LiveKitAPISecret,
+	// Voice service (custom SFU)
+	voiceService := calls.NewVoiceService(calls.VoiceConfig{
+		Host:      cfg.VoiceHost,
+		JWTSecret: cfg.VoiceJWTSecret,
 	})
 
 	// S3 Storage
@@ -106,7 +105,7 @@ func main() {
 	authHandler := handlers.NewAuthHandler(authRepo, tokenService, s3Storage)
 	friendsHandler := handlers.NewFriendsHandler(friendsRepo, rtNode)
 	messagesHandler := handlers.NewMessagesHandler(messagesRepo, rtNode, s3Storage)
-	callsHandler := handlers.NewCallsHandler(callsRepo, livekitService, authRepo, rtNotifier, messagesRepo)
+	callsHandler := handlers.NewCallsHandler(callsRepo, voiceService, authRepo, rtNotifier, messagesRepo)
 	stickersHandler := handlers.NewStickersHandler(stickersRepo, s3Storage, redisCache)
 
 	// Router

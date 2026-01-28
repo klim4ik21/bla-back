@@ -21,10 +21,9 @@ type Config struct {
 	S3SecretAccessKey string
 	S3CDNURL          string
 
-	// LiveKit
-	LiveKitHost      string
-	LiveKitAPIKey    string
-	LiveKitAPISecret string
+	// Voice SFU
+	VoiceHost      string
+	VoiceJWTSecret string
 
 	// Redis
 	RedisAddr string
@@ -47,10 +46,9 @@ func Load() *Config {
 		S3SecretAccessKey: getEnv("S3_SECRET_ACCESS_KEY", "KphWppiBgaPUMWZp1xdaXc7H5CcNxNBz22BDeHJO"),
 		S3CDNURL:          getEnv("S3_CDN_URL", "https://cdn.richislav.com/f5d9c802-spb1"),
 
-		// LiveKit
-		LiveKitHost:      getEnv("LIVEKIT_HOST", "ws://45.144.221.4:7880"),
-		LiveKitAPIKey:    getEnv("LIVEKIT_API_KEY", "devkey"),
-		LiveKitAPISecret: getEnv("LIVEKIT_API_SECRET", "secretsecretsecretsecretsecretsecret"),
+		// Voice SFU
+		VoiceHost:      getEnv("VOICE_HOST", "ws://localhost:7880"),
+		VoiceJWTSecret: getEnv("VOICE_JWT_SECRET", "voice-super-secret-key-change-in-production"),
 
 		// Redis (empty = disabled)
 		RedisAddr: getEnv("REDIS_ADDR", ""),

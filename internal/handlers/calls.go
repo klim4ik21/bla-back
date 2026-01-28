@@ -15,7 +15,7 @@ import (
 
 type CallsHandler struct {
 	callsRepo *calls.Repository
-	livekit   *calls.LiveKitService
+	voice     *calls.VoiceService
 	usersRepo UsersRepository
 	notifier  *realtime.Notifier
 	msgRepo   ConversationRepository
@@ -31,14 +31,14 @@ type ConversationRepository interface {
 
 func NewCallsHandler(
 	callsRepo *calls.Repository,
-	livekit *calls.LiveKitService,
+	voice *calls.VoiceService,
 	usersRepo UsersRepository,
 	notifier *realtime.Notifier,
 	msgRepo ConversationRepository,
 ) *CallsHandler {
 	return &CallsHandler{
 		callsRepo: callsRepo,
-		livekit:   livekit,
+		voice:     voice,
 		usersRepo: usersRepo,
 		notifier:  notifier,
 		msgRepo:   msgRepo,
@@ -151,9 +151,9 @@ func (h *CallsHandler) StartCall(w http.ResponseWriter, r *http.Request) {
 		username = *user.Username
 	}
 
-	// Generate LiveKit token
+	// Generate voice token
 	roomName := "call-" + call.ID.String()
-	token, err := h.livekit.GenerateToken(roomName, userID.String(), username)
+	token, err := h.voice.GenerateToken(roomName, userID.String(), username)
 	if err != nil {
 		log.Printf("GenerateToken error: %v", err)
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
@@ -167,7 +167,7 @@ func (h *CallsHandler) StartCall(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(CallResponse{
 		CallID:     call.ID.String(),
 		Token:      token,
-		LiveKitURL: h.livekit.GetWebSocketURL(),
+		LiveKitURL: h.voice.GetWebSocketURL(),
 	})
 }
 
@@ -224,9 +224,9 @@ func (h *CallsHandler) JoinCall(w http.ResponseWriter, r *http.Request) {
 		username = *user.Username
 	}
 
-	// Generate LiveKit token
+	// Generate voice token
 	roomName := "call-" + call.ID.String()
-	token, err := h.livekit.GenerateToken(roomName, userID.String(), username)
+	token, err := h.voice.GenerateToken(roomName, userID.String(), username)
 	if err != nil {
 		log.Printf("GenerateToken error: %v", err)
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
@@ -240,7 +240,7 @@ func (h *CallsHandler) JoinCall(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(CallResponse{
 		CallID:     call.ID.String(),
 		Token:      token,
-		LiveKitURL: h.livekit.GetWebSocketURL(),
+		LiveKitURL: h.voice.GetWebSocketURL(),
 	})
 }
 
