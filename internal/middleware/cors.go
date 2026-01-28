@@ -3,9 +3,10 @@ package middleware
 import "net/http"
 
 var allowedOrigins = map[string]bool{
-	"http://localhost:5173": true,
-	"https://joinbla.ru":    true,
+	"http://localhost:5173":  true,
+	"https://joinbla.ru":     true,
 	"https://www.joinbla.ru": true,
+	"https://web.joinbla.ru": true,
 }
 
 func CORS(next http.Handler) http.Handler {
